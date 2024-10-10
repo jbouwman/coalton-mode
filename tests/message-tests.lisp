@@ -1,0 +1,15 @@
+(in-package :coalton-mode/tests)
+
+(cm::define-message test-message ()
+  (:enable boolean)
+  (:flags (string :vector t))
+  (:debug (boolean :optional t)))
+
+(deftest message-tests/value ()
+  (let ((message (cm::make-message 'test-message)))
+    (cm::set-field message :debug t)
+    (cm::set-field message :flags (list "a" "b" "g"))
+    (is (equalp (cm::message-value message)
+                '(("flags" "a" "b" "g")
+                  ("debug" . T))))
+    message))

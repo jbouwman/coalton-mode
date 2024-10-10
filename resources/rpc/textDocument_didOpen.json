@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///Users/jbouwman/git/coalton-mode/resources/clj/src/main.clj","version":0,"languageId":"clojure","text":"(ns main)\n\n; Doc\n\n(defn -one \"right\"\n  []\n  jldsj iuwejosvdnl)\n"}}}
