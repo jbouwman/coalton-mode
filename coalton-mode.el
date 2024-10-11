@@ -296,14 +296,33 @@ Displays current tree-sitter node in mode line, useful for nav and highlighting 
                                          #'coalton--toplevel-form-p)))
     (treesit-node-text node t)))
 
-(add-to-list 'lsp-language-id-configuration '(coalton-mode . "coalton"))
 
-(defun coalton--server-args (port)
-  `("~/git/coalton-mode/coalton-mode" ,(number-to-string port)))
+;;; LSP
+
+;; If this is set, connect to an existing server rather than
+;; attempting to launch one.
+
+(defvar coalton-lsp-port 10001)
+
+(defun coalton--lsp-new-connection ()
+  (if coalton-lsp-port
+      (list
+       :connect (lambda (filter sentinel name environment-fn _workspace)
+                  (let ((tcp-proc (lsp--open-network-stream "127.0.0.1" 10001 (concat name "::tcp"))))
+                    (set-process-query-on-exit-flag tcp-proc nil)
+                    (set-process-filter tcp-proc filter)
+                    (cons tcp-proc tcp-proc)))
+       :test? (lambda () t))
+    (lsp-tcp-connection (lambda (port)
+                          `("~/git/coalton-mode/coalton-mode" ,(number-to-string port))))))
 
 (lsp-register-client (make-lsp-client
-                      :new-connection (lsp-tcp-connection #'coalton--server-args)
+                      :new-connection (coalton--lsp-new-connection)
                       :activation-fn (lsp-activate-on "coalton")
                       :server-id 'coalton))
+
+(add-to-list 'lsp-language-id-configuration '(coalton-mode . "coalton"))
+
+;; (setq lsp-tcp-connection-timeout 2)
 
 (provide 'coalton-mode)

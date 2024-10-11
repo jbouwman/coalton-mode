@@ -1,13 +1,8 @@
-This directory contains the source code for an Emacs mode that supports
-working with Coalton code.
+This is an Emacs mode that supports working with Coalton.
 
 ## Requirements
 
-This mode requires Emacs version > 29.1 because it relies on
-tree-sitter. You can check that your copy of Emacs was built with
-support for tree sitter by evaluating:
-
-    (treesit-available-p)
+`lsp-mode`
 
 ## Installation
 
@@ -21,11 +16,5 @@ add this directory to your load-path, and require the mode:
 
 ## Usage
 
-There is an example file, `types.coal` in the `test/` directory.
-
-The first time you open a `.coal` file, Emacs will ask you to approve
-the installation of a parser component:
-
-    tree-sitter-coalton is not installed. Clone, build and install it?
-    
-(Answer 'yes')
+Open a .coal file (e.g., fibonacci.coal in the root directory) and
+enable lsp-mode With `M-x lsp-mode`.
