@@ -24,7 +24,7 @@
      ,@scope))
 
 (defmethod start ((self process))
-  (format t ";; Start ~a~%" self)
+  (/info "start ~a" self)
   (with-slots (thread) self
     (setf thread
           (bt:make-thread (lambda ()

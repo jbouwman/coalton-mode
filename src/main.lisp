@@ -33,9 +33,10 @@
 (defun main (&key port)
   "Run a Coalton server on PORT.  PORT must be specified."
   (start-server port)
-  (format t ";; Coalton Server started: ~a~%Shutdown with C-c.~%" *server*)
+  (/info "server started: ~a~%Shutdown with C-c" *server*)
   (handler-case
       (loop (sleep 1))
     (sb-sys:interactive-interrupt ()
-      (format t "~%;; Coalton Server halted.~%~%")
+      (/info "server halted")
+      (terpri)
       (cl-user::quit))))

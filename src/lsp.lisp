@@ -14,10 +14,6 @@
 
 (define-primitive uinteger)
 
-(define-message server-info ()
-  (:name string)
-  (:version (string :optional t)))
-
 (define-message position ()
   (:line uinteger)
   (:character uinteger))
@@ -25,24 +21,6 @@
 (define-message range ()
   (:start position)
   (:end position))
-
-(define-enum position-encoding-kind ()
-  (:utf8 "utf-8")
-  (:utf16 "utf-16")
-  (:utf32 "utf-32"))
-
-(define-enum text-document-sync-kind ()
-  (:none 0)
-  (:full 1)
-  (:incremental 2))
-
-(define-message text-document-sync-options ()
-  (:open-close boolean)
-  (:change (text-document-sync-kind :optional t)))
-
-(define-message server-capabilities ()
-  (:position-encoding (position-encoding-kind :optional t))
-  (:text-document-sync (text-document-sync-options :optional t)))
 
 ;;; Messages
 
@@ -61,10 +39,6 @@
   #++ (:capabilities client-capabilities)
   #++ (:trace (trace-value :optional t))
   #++ (:workspace-folders (workspace-folder :vector t :optional t)))
-
-(define-message initialize-result ()
-  (:capabilities server-capabilities)
-  (:server-info server-info))
 
 (define-enum error-code ()
   (:unknown-error-code -32001)

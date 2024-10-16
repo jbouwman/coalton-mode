@@ -8,6 +8,7 @@
   :pathname "src/"
   :serial t
   :components ((:file "package")
+               (:file "log")
                (:file "rpc")
                (:file "process")
                (:file "message")
@@ -29,4 +30,5 @@
   :serial t
   :components ((:file "package")
                (:file "rpc-tests")
-               (:file "lsp-tests")))
+               (:file "lsp-tests")
+               (:file "session-tests")))

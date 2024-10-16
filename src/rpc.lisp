@@ -85,11 +85,11 @@
     (format stream "id: ~a" (or (message-id self) "NONE"))))
 
 (defun read-rpc (stream)
+  (/info "enter read-rpc")
   (let* ((headers (read-headers stream))
          (content-length (content-length headers))
          (content (make-array content-length :element-type 'character)))
     (read-sequence content stream :start 0 :end content-length)
-    (break)
     (make-instance 'rpc-message
       :headers headers
       :content (json:decode-json-from-string content))))
