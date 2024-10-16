@@ -8,14 +8,17 @@
   :pathname "src/"
   :serial t
   :components ((:file "package")
-               (:file "log")
-               (:file "rpc")
-               (:file "process")
-               (:file "message")
-               (:file "lsp")
+               ;; everything in 'lib' is general purpose code
+               (:module "lib"
+                :serial t
+                :components ((:file "log")
+                             (:file "list")
+                             (:file "rpc")
+                             (:file "process")
+                             (:file "message")))
                (:file "session")
-               (:file "server")
-               (:file "main")))
+               (:file "protocol")
+               (:file "server")))
 
 (defsystem #:coalton-mode/examples
   :pathname "resources/"

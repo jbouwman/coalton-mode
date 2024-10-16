@@ -3,27 +3,22 @@
 (defvar *message-classes*
   (make-hash-table))
 
-(defclass primitive-type ()
-  ((name :initarg :name)))
+(defclass message-type ()
+  ((name :initarg :name
+         :reader name)))
 
-(defmethod accept-p ((self primitive-type) value)
+(defclass message-atom (message-type)
+  ())
+
+(defmethod accept-p ((self message-atom) value)
   (unless (typep value (slot-value self 'name))
-    (error "Primitive ~a does not accept value ~a" self value))
+    (error "Atom ~a does not accept value ~a" self value))
   value)
 
-(defclass message-class ()
-  ((name :initarg :name :reader name)
-   (fields :initform (make-array 0 :adjustable t :fill-pointer t))))
-
-(defmethod print-object ((self message-class) stream)
-  (with-slots (name fields) self
-    (print-unreadable-object (self stream :type t :identity t)
-      (format stream "~a (~d fields)" name (length fields)))))
-
-(defclass message-field ()
-  ((name :initarg :name)
-   (type :initarg :type)
-   (optional :initarg :optional)))
+(defclass message-field (message-type)
+  ((type :initarg :type)
+   (optional :initarg :optional)
+   (vector :initarg :vector)))
 
 (defmethod print-object ((self message-field) stream)
   (with-slots (name type) self
@@ -33,19 +28,28 @@
 (defun parse-field-type (type)
   (etypecase type
     (list
-     (destructuring-bind (type &key optional) type
-       (list type optional)))
+     (destructuring-bind (type &key optional vector) type
+       (list type optional vector)))
     (symbol
-     (list type nil))))
+     (list type nil nil))))
 
 (defun make-field (spec)
   (destructuring-bind (name type) spec
-    (destructuring-bind (type optional) (parse-field-type type)
+    (destructuring-bind (type optional vector) (parse-field-type type)
       (get-message-class type)
       (make-instance 'message-field
         :name name
         :type type
-        :optional optional))))
+        :optional optional
+        :vector vector))))
+
+(defclass message-class (message-type)
+  ((fields :initform (make-array 0 :adjustable t :fill-pointer t))))
+
+(defmethod print-object ((self message-class) stream)
+  (with-slots (name fields) self
+    (print-unreadable-object (self stream :type t :identity t)
+      (format stream "~a (~d fields)" name (length fields)))))
 
 (defun add-field (class field)
   (vector-push-extend field (slot-value class 'fields)))
@@ -56,9 +60,9 @@
           :do (return-from %get-field field))
   (error "Field not found: ~a" name))
 
-(defmacro define-primitive (name)
+(defmacro define-atom (name)
   `(setf (gethash ',name *message-classes*)
-         (make-instance 'primitive-type :name ',name)))
+         (make-instance 'message-atom :name ',name)))
 
 (defmacro define-message (name parent-classes &body field-defs)
   `(let ((message (make-instance 'message-class :name ',name)))
@@ -75,9 +79,8 @@
 
 ;;; Enums
 
-(defclass message-enum ()
-  ((name :initarg :name)
-   (values :initform (make-hash-table))))
+(defclass message-enum (message-type)
+  ((values :initform (make-hash-table))))
 
 (defmethod print-object ((self message-enum) stream)
   (with-slots (name values) self
@@ -98,9 +101,8 @@
 
 ;;; Unions
 
-(defclass message-union ()
-  ((name :initarg :name)
-   (types :initarg :types)))
+(defclass message-union (message-type)
+  ((types :initarg :types)))
 
 (defmethod print-object ((self message-union) stream)
   (with-slots (name) self
@@ -122,7 +124,8 @@
 (defclass message ()
   ((class :initarg :class)
    (value :initarg :value
-          :initform nil)))
+          :initform nil
+          :reader message-value)))
 
 (defmethod print-object ((self message) stream)
   (with-slots (class value) self
@@ -134,40 +137,23 @@
                  :class (get-message-class name)
                  :value value))
 
-(defun listify (x)
-  (if (listp x) x (list x)))
+;; (declaim (optimize (debug 3)))
 
-(defun set-value (alist path value)
-  (let ((path (listify path)))
-    (if (null path)
-        value
-        (let ((key (car path)))
-          (if (null (cdr path))
-              (acons key value (remove key alist :key #'car))
-              (let ((sub-alist (assoc key alist)))
-                (if sub-alist
-                    (acons key
-                           (set-value (cdr sub-alist) (cdr path) value)
-                           (remove key alist :key #'car))
-                    (acons key
-                           (set-value nil (cdr path) value)
-                           alist))))))))
-
-(defun get-class-field (class path)
-  (let ((path (listify path)))
-    (if (null (car path))
-        class
-        (let ((field (%get-field class (car path))))
-          (when field
-            (let* ((type (slot-value field 'type))
-                   (class (get-message-class type)))
-              (get-class-field class (cdr path))))))))
+(defun get-field-info (class path)
+  (let* ((path (listify path))
+         (field (%get-field class (car path))))
+    (when field
+      (let* ((type (slot-value field 'type))
+             (field-class (get-message-class type)))
+        (if (= 1 (length path))
+            (values field-class field) 
+            (get-field-info field-class (cdr path)))))))
 
 ;; Message API
 
 (defun get-field (message path)
   (with-slots (class value) message
-    (get-class-field class path)
+    (get-field-info class path)         ; prevent requests for nonexistent fields
     (loop :with value := value
           :for element :in (listify path)
           :do (setf value (cdr (assoc element value)))
@@ -175,7 +161,14 @@
 
 (defun set-field (message path new-value)
   (with-slots (class value) message
-    (let ((field (get-class-field class path)))
-      (setf value
-            (set-value value path (accept-p field new-value))))
+    (multiple-value-bind (field-class parent-class)
+        (get-field-info class path)
+      (cond ((slot-value parent-class 'vector)
+             (setf value
+                   (set-value value path (mapcar (lambda (value)
+                                                   (accept-p field-class value))
+                                                 new-value))))
+            (t
+             (setf value
+                   (set-value value path (accept-p field-class new-value))))))
     message))
