@@ -31,5 +31,3 @@
                             (run self))
                           :name (name self))))
   self)
-
-
