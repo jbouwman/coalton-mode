@@ -5,6 +5,12 @@
          (concatenate 'string ";; ~s coalton-mode: " message "~%")
          level args))
 
+(defun /trace (message &rest args)
+  #++ (%log :trace message args))
+
+(defun /debug (message &rest args)
+  (%log :debug message args))
+
 (defun /info (message &rest args)
   (%log :info message args))
 

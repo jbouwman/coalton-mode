@@ -12,16 +12,22 @@
 (defun session-stream (session)
   (usocket:socket-stream (slot-value session 'socket)))
 
+(define-condition session-exit ()
+  ())
+
 (defun read-message (session)
   (handler-case
       (with-lock-held (session)
         (read-rpc (session-stream session)))
     (sb-int:closed-stream-error ()
       (/info "remote session disconnected (stream closed)")
-      nil)
+      (signal 'session-exit))
     (end-of-file ()
       (/info "remote session disconnected (end of file)")
-      nil)))
+      (signal 'session-exit))
+    (error (c)
+      (/info "incomplete read: session shutdown: ~a" c)
+      (signal 'session-exit))))
 
 (defun make-response (request)
   (let ((response (new-message 'response-message)))
@@ -29,6 +35,10 @@
     (set-field response :id (get-field request :id))))
 
 (defun response-error (request error-code args)
+  (apply #'/error args)
+  (unless (get-field request :id)
+    ;; No id: it was a notification: don't reply
+    (return-from response-error nil))
   (let ((response (make-response request)))
     (set-field response (list :error :code) error-code)
     (set-field response (list :error :message) (apply #'format nil args))
@@ -42,12 +52,9 @@
 
 (defun request-method (request)
   (let ((rpc-version (get-field request :jsonrpc))
-        (id (get-field request :id))
         (method (get-field request :method)))
     (cond ((not (string-equal rpc-version "2.0"))
            (invalid-request "Bad rpc version ~a" rpc-version))
-          ((not id)
-           (invalid-request "Missing message id"))
           ((not method)
            (invalid-request "Missing method")))
     method))
@@ -67,30 +74,30 @@
       (new-message message-class (get-field request :params)))))
 
 (defun process-request (session request)
-  (let ((method (request-method request)))
-    (destructuring-bind (message-class . message-handler)
-        (gethash method *request-methods*)
-      (cond ((not message-class)
-             (method-not-found request "Unsupported method '~a'" method))
-            (t
-             (funcall message-handler session request))))))
+  (let* ((method (request-method request))
+         (message-handler (cdr (gethash method *request-methods*))))
+    (cond ((not message-handler)
+           (method-not-found request "Unsupported method '~a'" method))
+          (t
+           (funcall message-handler session request)))))
 
 (defun write-message (session message)
   (with-lock-held (session)
-    (write-rpc message (session-stream session))))
+    (write-rpc (message-value message)
+               (session-stream session))))
 
 (defun process-one-message (session)
-  (let ((message (read-message session)))
-    (unless message
-      (stop session)
-      (return-from process-one-message))
-    (write-message session
-                   (process-request session
-                                    (new-message 'request-message
-                                                 (slot-value message 'content))))))
+  (let* ((message (read-message session))
+         (request (new-message 'request-message (get-parsed-content message)))
+         (response (process-request session request)))
+    (when response
+      (write-message session response))))
 
 (defmethod run ((session session))
-  (loop :do (process-one-message session)))
+  (handler-case
+      (loop :do (process-one-message session))
+    (session-exit ()
+      (stop session))))
 
 (defmethod stop ((session session))
   (/info "stopping session ~a" session)

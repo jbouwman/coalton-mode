@@ -42,10 +42,12 @@
 
 (defmethod stop ((self server))
   (with-lock-held (self)
-    (with-slots (listener) self
+    (with-slots (sessions listener) self
       (when listener
         (usocket:socket-close listener)
-        (setf listener nil))))
+        (setf listener nil))
+      (dolist (session sessions)
+        (stop session))))
   self)
 
 ;;; Start, restart and stop the LSP server

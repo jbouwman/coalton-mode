@@ -56,6 +56,13 @@
 (define-message message ()
   (:jsonrpc string))
 
+(define-message notification-message (message)
+  (:method string)
+  (:params t))
+
+(define-message message ()
+  (:jsonrpc string))
+
 (define-message request-message (message)
   (:id integer)
   (:method string)
@@ -391,3 +398,9 @@
     (let ((response (make-response request)))
       (set-field response :result (slot-value result 'value))
       response)))
+
+(define-handler ("initialized" initialized-params)
+  (session request)
+  (declare (ignore session request))
+  (/info "Received 'initialized' notification")
+  nil)

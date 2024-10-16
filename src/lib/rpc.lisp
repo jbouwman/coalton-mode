@@ -74,30 +74,51 @@
       (parse-integer value))))
 
 (defclass rpc-message ()
-  ((headers :initarg :headers)
-   (content :initarg :content)))
+  ((content :initarg :content
+            :reader message-content
+            :documentation "A JSON value")
+   (parsed-content :initarg :parsed
+                   :initform nil)))
+
+(defun get-parsed-content (rpc-message)
+  (with-slots (content parsed-content) rpc-message
+    (unless parsed-content
+      (setf parsed-content (json:decode-json-from-string content)))
+    parsed-content))
 
 (defun message-id (rpc-message)
-  (cdr (assoc "id" (slot-value rpc-message 'content) :test #'string-equal)))
+  (cdr (assoc "id" (get-parsed-content rpc-message) :test #'string-equal)))
 
 (defmethod print-object ((self rpc-message) stream)
   (print-unreadable-object (self stream :type t :identity t)
-    (format stream "id: ~a" (or (message-id self) "NONE"))))
+    (format stream "id: ~a json = ~s"
+            (or (message-id self) "NONE")
+            (message-content self))))
 
 (defun read-rpc (stream)
-  (/info "enter read-rpc")
+  (/trace "enter read-rpc")
   (let* ((headers (read-headers stream))
          (content-length (content-length headers))
          (content (make-array content-length :element-type 'character)))
     (read-sequence content stream :start 0 :end content-length)
-    (make-instance 'rpc-message
-      :headers headers
-      :content (json:decode-json-from-string content))))
+    (let ((message (make-instance 'rpc-message
+                     :content content)))
+      (/debug "=> json-rpc ~a" message)
+      (/trace "exit read-rpc")
+      message)))
 
-(defun write-rpc (message stream)
-  (let ((content (json:encode-json-to-string message)))
+(defun %write-rpc (message stream)
+  (let ((content (message-content message)))
     (write-headers stream `(("Content-Length" . ,(length content))
                             ("Content-Type" . "application/json-rpc")))
     (write-sequence content stream)
-    (force-output stream)
-    (break)))
+    (force-output stream)))
+
+(defun write-rpc (value stream)
+  (/trace "enter write-rpc")
+  (let ((message (make-instance 'rpc-message
+                   :parsed value
+                   :content (json:encode-json-to-string value))))
+    (/debug "<= json-rpc ~a" message)
+    (%write-rpc message stream)
+    (/trace "exit write-rpc")))
