@@ -6,7 +6,9 @@
   ((server :initarg :server)
    (socket :initarg :socket)
    (state :accessor session-state
-          :initform 'uninitialized))
+          :initform 'uninitialized)
+   (root-uri :initform nil
+             :accessor root-uri))
   (:documentation "Per-connection session data & runloop."))
 
 (defun session-stream (session)
@@ -62,16 +64,17 @@
 (defvar *request-methods*
   (make-hash-table :test 'equal))
 
-(defmacro define-handler ((method request-message-class) &body body)
+(defmacro define-handler ((method params-message-class) &body body)
   `(setf (gethash ,method *request-methods*)
-         (cons ',request-message-class
+         (cons ',params-message-class
                (lambda ,@body))))
 
-(defun get-request (request)
+(defun request-params (request)
+  "Return REQUEST's params message."
   (let* ((method (request-method request))
-         (message-class (car (gethash method *request-methods*))))
-    (when message-class
-      (new-message message-class (get-field request :params)))))
+         (params-message-class (car (gethash method *request-methods*))))
+    (when params-message-class
+      (new-message params-message-class (get-field request :params)))))
 
 (defun process-request (session request)
   (let* ((method (request-method request))

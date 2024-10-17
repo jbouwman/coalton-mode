@@ -1,9 +1,11 @@
 (in-package #:coalton-mode/tests)
 
+(defun new-request (message)
+  (cm::new-message 'cm::request-message message))
+
 (defun send-message (session message)
   (cm::message-value
-   (cm::process-request session (cm::new-message 'cm::request-message message))))
-
+   (cm::process-request session (new-request message))))
 
 (deftest initialize-session ()
   (let ((session (make-instance 'cm::session)))
@@ -16,6 +18,3 @@
                    (:NAME . "Coalton")))
                  (:ID . 1)
                  (:JSONRPC . "2.0"))))))
-
-
-(send-message (make-instance 'cm::session) coalton-mode/examples:initialize)

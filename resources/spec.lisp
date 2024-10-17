@@ -1516,16 +1516,10 @@
 (define-message did-change-configuration-client-capabilities ()
   (:dynamic-registration (boolean :optional t)))
 
-(define-message did-change-configuration-params ()
-  (:settings lsp-any))
-
 (define-message workspace-folders-server-capabilities ()
   (:supported (boolean :optional t))
   (:change-notifications (or (or string boolean) null)))
 
-(define-message workspace-folder ()
-  (:uri uri)
-  (:name string))
 (define-message did-change-workspace-folders-params ()
   (:event workspace-folders-change-event))
 

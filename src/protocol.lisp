@@ -8,6 +8,10 @@
 
 (define-atom string)
 
+(deftype uri () 'string)
+
+(define-atom uri)
+
 (define-atom boolean)
 
 (define-atom integer)
@@ -322,22 +326,47 @@
   #++ (:general (general-client-capabilities :optional t))
   #++ (:experimental lsp-any))
 
+(define-message client-info ()
+  (:name string)
+  (:version (string :optional t)))
+
+(define-message workspace-folder ()
+  (:uri uri)
+  (:name string))
+
+(define-enum trace-value ()
+  (:off "off")
+  (:messages "messages")
+  (:verbose "verbose"))
+
 (define-message initialize-params (work-done-progress-params)
   (:process-id (integer :optional t))
-  #++ (:client-info (client-info :optional t))
+  (:client-info (client-info :optional t))
   (:locale (string :optional t))
   (:root-path (string :optional t))
-  #++ (:root-uri (document-uri :optional t))
+  (:root-uri (uri :optional t))
   (:initialization-options t)
   (:capabilities client-capabilities)
-  #++ (:trace (trace-value :optional t))
-  #++ (:workspace-folders (workspace-folder :vector t :optional t)))
+  (:trace (trace-value :optional t))
+  (:workspace-folders (workspace-folder :vector t :optional t)))
 
 (define-message completion-item-options ()
   (:label-details-support (boolean :optional t)))
 
 (define-message work-done-progress-options ()
   (:work-done-progress (boolean :optional t)))
+
+(define-message declaration-options (work-done-progress-options))
+
+(define-message definition-options (work-done-progress-options))
+
+(define-message document-link-options (work-done-progress-options)
+  (:resolve-provider (boolean :optional t)))
+
+(define-message document-formatting-options (work-done-progress-options))
+
+(define-message document-symbol-options (work-done-progress-options)
+  (:label (string :optional t)))
 
 (define-message completion-options (work-done-progress-options)
   (:trigger-characters (string :optional t :vector t))
@@ -349,21 +378,21 @@
   (:position-encoding (position-encoding-kind :optional t))
   (:text-document-sync (text-document-sync-options :optional t))
   #++ (:notebook-document-sync (or notebook-document-sync-options notebook-document-sync-registration-options))
-  #++ (:completion-provider (completion-options :optional t))
+  (:completion-provider (completion-options :optional t))
   #++ (:hover-provider (or boolean hover-options))
   #++ (:signature-help-provider (signature-help-options :optional t))
-  #++ (:declaration-provider (or boolean declaration-options declaration-registration-options))
-  #++ (:definition-provider (or boolean definition-options))
+  #++ (:declaration-provider (declaration-options declaration-registration-options))
+  (:definition-provider (definition-options :optional t))
   #++ (:type-definition-provider (or boolean type-definition-options type-definition-registration-options))
   #++ (:implementation-provider (or boolean implementation-options implementation-registration-options))
   #++ (:references-provider (or boolean reference-options))
   #++ (:document-highlight-provider (or boolean document-highlight-options))
-  #++ (:document-symbol-provider (or boolean document-symbol-options))
+  (:document-symbol-provider (document-symbol-options :optional t))
   #++ (:code-action-provider (or boolean code-action-options))
   #++ (:code-lens-provider (code-lens-options :optional t))
-  #++ (:document-link-provider (document-link-options :optional t))
+  (:document-link-provider (document-link-options :optional t))
   #++ (:color-provider (or boolean document-color-options document-color-registration-options))
-  #++ (:document-formatting-provider (or boolean document-formatting-options))
+  (:document-formatting-provider (document-formatting-options :optional t))
   #++ (:document-range-formatting-provider (or boolean document-range-formatting-options))
   #++ (:document-on-type-formatting-provider (document-on-type-formatting-options :optional t))
   #++ (:rename-provider (or boolean rename-options))
@@ -389,10 +418,16 @@
 (define-handler ("initialize" initialize-params)
     (session request)
   (setf (session-state session) 'initialized)
-  (let ((result (new-message 'initialize-result)))
+  (let ((params (request-params request))
+        (result (new-message 'initialize-result)))
+
+    (setf (root-uri session) (get-field params :root-uri))
+
     (set-field result (list :server-info :name) "Coalton")
     (set-field result (list :capabilities :text-document-sync :open-close) t)
     (set-field result (list :capabilities :text-document-sync :change) :full)
+    (set-field result (list :capabilities :definition-provider :work-done-progress) t)
+    (set-field result (list :capabilities :document-formatting-provider :work-done-progress) t)
     ;; TODO positionEncoding to be selected from list offered by client
     (set-field result (list :capabilities :position-encoding) :utf16)
     (let ((response (make-response request)))
@@ -404,3 +439,13 @@
   (declare (ignore session request))
   (/info "Received 'initialized' notification")
   nil)
+
+(define-message did-change-configuration-params ()
+  (:settings t))
+
+(define-handler ("workspace/didChangeConfiguration" did-change-configuration-params)
+  (session request)
+  (declare (ignore session))
+  (let ((params (request-params request)))
+    (/info "workspace/didChangeConfiguration settings = ~a" (get-field params :settings))
+    nil))
