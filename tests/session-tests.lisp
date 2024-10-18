@@ -1,11 +1,11 @@
 (in-package #:coalton-mode/tests)
 
-(defun new-request (message)
-  (cm::new-message 'cm::request-message message))
+(defun make-request (message)
+  (cm::make-message 'cm::request-message message))
 
 (defun send-message (session message)
   (cm::message-value
-   (cm::process-request session (new-request message))))
+   (cm::process-request session (make-request message))))
 
 (deftest initialize-session ()
   (let ((session (make-instance 'cm::session)))

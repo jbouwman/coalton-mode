@@ -37,6 +37,7 @@
   (destructuring-bind (name type) spec
     (destructuring-bind (type optional vector) (parse-field-type type)
       (get-message-class type)
+      (assert (stringp name))
       (make-instance 'message-field
         :name name
         :type type
@@ -132,7 +133,7 @@
     (print-unreadable-object (self stream :type t :identity t)
       (format stream "~a ~a" (name class) value))))
 
-(defun new-message (name &optional value)
+(defun make-message (name &optional value)
   (make-instance 'message
                  :class (get-message-class name)
                  :value value))
@@ -159,7 +160,7 @@
           :do (setf value (cdr (assoc element value)))
           :finally (return value))))
 
-(defun set-field (message path new-value)
+(defun set-field (message path field-value)
   (with-slots (class value) message
     (multiple-value-bind (field-class parent-class)
         (get-field-info class path)
@@ -167,8 +168,8 @@
              (setf value
                    (set-value value path (mapcar (lambda (value)
                                                    (accept-p field-class value))
-                                                 new-value))))
+                                                 field-value))))
             (t
              (setf value
-                   (set-value value path (accept-p field-class new-value))))))
+                   (set-value value path (accept-p field-class field-value))))))
     message))

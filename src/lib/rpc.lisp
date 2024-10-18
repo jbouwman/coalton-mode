@@ -83,7 +83,7 @@
 (defun get-parsed-content (rpc-message)
   (with-slots (content parsed-content) rpc-message
     (unless parsed-content
-      (setf parsed-content (json:decode-json-from-string content)))
+      (setf parsed-content (decode-json content)))
     parsed-content))
 
 (defun message-id (rpc-message)
@@ -118,7 +118,13 @@
   (/trace "enter write-rpc")
   (let ((message (make-instance 'rpc-message
                    :parsed value
-                   :content (json:encode-json-to-string value))))
+                   :content (encode-json value))))
     (/debug "<= json-rpc ~a" message)
     (%write-rpc message stream)
     (/trace "exit write-rpc")))
+
+
+
+
+
+(read-json-string (write-json-string (read-json-string "{\"key\":[1,2,3],\"duckQuack\":{\"a\":3}}")))

@@ -32,9 +32,16 @@
       (signal 'session-exit))))
 
 (defun make-response (request)
-  (let ((response (new-message 'response-message)))
+  (let ((response (make-message 'response-message)))
     (set-field response :jsonrpc "2.0")
     (set-field response :id (get-field request :id))))
+
+(defun make-notification (method params)
+  (let ((notification (make-message 'notification-message)))
+    (set-field notification :jsonrpc "2.0")
+    (set-field notification :method method)
+    (set-field notification :params params)
+    notification))
 
 (defun response-error (request error-code args)
   (apply #'/error args)
@@ -74,7 +81,7 @@
   (let* ((method (request-method request))
          (params-message-class (car (gethash method *request-methods*))))
     (when params-message-class
-      (new-message params-message-class (get-field request :params)))))
+      (make-message params-message-class (get-field request :params)))))
 
 (defun process-request (session request)
   (let* ((method (request-method request))
@@ -91,7 +98,7 @@
 
 (defun process-one-message (session)
   (let* ((message (read-message session))
-         (request (new-message 'request-message (get-parsed-content message)))
+         (request (make-message 'request-message (get-parsed-content message)))
          (response (process-request session request)))
     (when response
       (write-message session response))))

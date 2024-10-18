@@ -13,6 +13,7 @@
                 :serial t
                 :components ((:file "log")
                              (:file "list")
+                             (:file "json")
                              (:file "rpc")
                              (:file "process")
                              (:file "message")))
