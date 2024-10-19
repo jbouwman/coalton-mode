@@ -11,13 +11,15 @@
   ())
 
 (defmethod accept-p ((self message-atom) value)
-  (unless (typep value (slot-value self 'name))
-    (error "illegal value type for atom ~a: ~a" self value))
+  #++  (unless (typep value (slot-value self 'name)) ; FIXME -- defer to rewrite of accept-p
+         (error "illegal value type for atom ~a: ~a" self value))
   value)
 
 (defclass message-field (message-type)
-  ((json :initarg :json)                ; field value's key in a JSON-serialized map
-   (type :initarg :type)
+  ((json :initarg :json
+         :reader json-key) ; field value's key in a JSON map
+   (type :initarg :type
+         :reader field-type)
    (optional :initarg :optional)
    (vector :initarg :vector)))
 
@@ -25,6 +27,9 @@
   (with-slots (name type) self
     (print-unreadable-object (self stream :type t :identity t)
       (format stream "~a (~a)" name type))))
+
+(defmethod accept-p (self value)
+  value)
 
 (defun parse-field-type (type)
   (etypecase type
@@ -140,36 +145,40 @@
                  :class (get-message-class name)
                  :value value))
 
-(defun field-info (class path)
-  (let* ((path (listify path))
-         (field (%get-field class (car path))))
-    (when field
-      (let* ((type (slot-value field 'type))
-             (field-class (get-message-class type)))
-        (if (= 1 (length path))
-            (values field-class field) 
-            (field-info field-class (cdr path)))))))
+(defun field-1 (message key)
+  (let ((field (%get-field (message-class message) key)))
+    (make-message (field-type field)
+                  (cdr (assoc (json-key field)
+                              (message-value message)
+                              :test #'string=)))))
+
+(defun field-n (message path)
+  (reduce #'field-1 (listify path) :initial-value message))
+
+(defun set-field-1 (message key value)
+  (let ((field (%get-field (message-class message) key)))
+    (make-message (name (message-class message))
+                  (acons (json-key field)
+                         (accept-p (get-message-class (field-type field)) value) ; misnomer
+                         (remove (json-key field)
+                                 (message-value message)
+                                 :key #'car
+                                 :test #'string=)))))
+
+(defun with-field (message path value)
+  (destructuring-bind (key &rest keys) (listify path)
+    (set-field-1 message key
+                 (if (null keys)
+                     value
+                     (message-value (with-field (field-1 message key)
+                                      keys value))))))
 
 ;; Message API
 
 (defun get-field (message path)
-  (with-slots (class value) message
-    (field-info class path)         ; prevent requests for nonexistent fields
-    (loop :with value := value
-          :for element :in (listify path)
-          :do (setf value (cdr (assoc element value)))
-          :finally (return value))))
+  (message-value (field-n message (listify path))))
 
-(defun set-field (message path field-value)
-  (with-slots (class value) message
-    (multiple-value-bind (field-class parent-class)
-        (field-info class path)
-      (cond ((slot-value parent-class 'vector)
-             (setf value
-                   (set-value value path (mapcar (lambda (value)
-                                                   (accept-p field-class value))
-                                                 field-value))))
-            (t
-             (setf value
-                   (set-value value path (accept-p field-class field-value))))))
-    message))
+(defun set-field (message path value)
+  (setf (slot-value message 'value)
+        (slot-value (with-field message (listify path) value) 'value))
+  message)

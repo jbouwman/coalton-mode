@@ -1,24 +1,30 @@
 (in-package #:coalton-mode/tests)
 
-(defun make-request (message)
-  (cm::make-message 'cm::request-message message))
-
-(defun send-message (session message)
-  (cm::message-value
-   (cm::process-request session (make-request message))))
-
 (deftest session-tests/initialize ()
   (let ((session (make-instance 'cm::session)))
-    (is (equal (send-message session (rpc-example "initialize.json"))
-               '((:RESULT
-                  (:CAPABILITIES
-                   (:POSITION-ENCODING . "utf-16")
-                   (:TEXT-DOCUMENT-SYNC (:CHANGE . 1) (:OPEN-CLOSE . T)))
-                  (:SERVER-INFO
-                   (:NAME . "Coalton")))
-                 (:ID . 1)
-                 (:JSONRPC . "2.0"))))))
+    (is (equalp (cm::message-value
+                 (cm::process-request
+                  session (cm::make-request (rpc-example "initialize.json"))))
+                '(("result"
+                   ("capabilities" ("positionEncoding" . "utf-16")
+                    ("documentFormattingProvider" ("workDoneProgress" . T))
+                    ("definitionProvider" ("workDoneProgress" . T))
+                    ("textDocumentSync" ("change" . 1) ("openClose" . T)))
+                   ("serverInfo" ("name" . "Coalton")))
+                  ("id" . 1) ("jsonrpc" . "2.0"))))))
 
 (deftest session-tests/get-field ()
-  (cm::get-field (cm::message-class (cm::make-request (rpc-example "initialize.json")))
-                 (list :jsonrpc)))
+  (let ((init (cm::make-request (rpc-example "initialize.json"))))
+    (is (eq 1 (cm::get-field init :id)))
+
+    (let ((params (cm::request-params init)))
+      (is (eq t
+              (cm:get-field params '(:capabilities :workspace
+                                     :did-change-watched-files :dynamic-registration)))))))
+
+(deftest session-tests/set-field ()
+  (let ((params (cm::make-message 'cm::initialize-params)))
+    (cm::message-value (cm::set-field-1 params :capabilities 'x)))
+  (let ((params (cm::make-message 'cm::initialize-params)))
+    (cm:set-field params '(:capabilities :workspace) 'x)))
+
