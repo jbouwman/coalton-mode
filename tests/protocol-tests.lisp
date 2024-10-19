@@ -1,7 +1,6 @@
 (in-package #:coalton-mode/tests)
 
-(deftest initialize-params ()
-  (let ((params (cm::request-params
-                 (new-request coalton-mode/examples:initialize))))
+(deftest protocol-tests/initialize ()
+  (let ((params (cm::request-params (cm::make-request (rpc-example "initialize.json")))))
     (cm:get-field params :root-uri)
     (cm:get-field params :workspace-folders)))

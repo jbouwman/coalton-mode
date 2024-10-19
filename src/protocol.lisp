@@ -30,7 +30,12 @@
   (:start position)
   (:end position))
 
-(define-union progress-token (integer string))
+(define-message location ()
+  (:uri uri)
+  (:range range))
+
+(define-union progress-token
+    (integer string))
 
 (define-message work-done-progress-params ()
   (:work-done-token progress-token))
@@ -76,13 +81,6 @@
   (:id integer)
   (:result t)
   (:error response-error))
-
-;;; Session initialization
-;;;
-;;; The first message sent by the client is 'initialize', containing
-;;; 'initialize-params' in the :params field, describing client
-;;; capabilities. The server replies with 'initialized', and describes
-;;; its capabilities.
 
 (define-enum position-encoding-kind ()
   (:utf8 "utf-8")
@@ -339,6 +337,13 @@
   (:messages "messages")
   (:verbose "verbose"))
 
+;;; Session initialization
+;;;
+;;; The first message sent by the client is 'initialize', containing
+;;; 'initialize-params' in the :params field, describing client
+;;; capabilities. The server replies with 'initialized', and describes
+;;; its capabilities.
+
 (define-message initialize-params (work-done-progress-params)
   (:process-id (integer :optional t))
   (:client-info (client-info :optional t))
@@ -419,7 +424,7 @@
     (session request)
   (setf (session-state session) 'initialized)
   (let ((params (request-params request))
-        (result (new-message 'initialize-result)))
+        (result (make-message 'initialize-result)))
 
     (setf (root-uri session) (get-field params :root-uri))
 
@@ -445,7 +450,62 @@
 
 (define-handler ("workspace/didChangeConfiguration" did-change-configuration-params)
   (session request)
-  (declare (ignore session))
   (let ((params (request-params request)))
     (/info "workspace/didChangeConfiguration settings = ~a" (get-field params :settings))
+    ;; queue fake diagnostic information
+    ;; FIXME do this from a locked session thread
+    (write-message session (demo-diagnostic))
     nil))
+
+(define-enum diagnostic-severity ()
+  (:error 1)
+  (:warning 2)
+  (:information 3)
+  (:hint 4))
+
+(define-enum diagnostic-tag ()
+  (:unnecessary 1)
+  (:deprecated 2))
+
+(define-message diagnostic-related-information ()
+  (:location location)
+  (:message string))
+
+(define-message diagnostic ()
+  (:range range)
+  (:severity diagnostic-severity)
+  (:code string)
+  (:source string)
+  (:message string)
+  (:tags (diagnostic-tag :vector t))
+  (:related-information (diagnostic-related-information :vector t))
+  (:data t))
+
+(define-message publish-diagnostics-params ()
+  (:uri uri)
+  (:version (integer :optional t))
+  (:diagnostics (diagnostic :vector t)))
+
+;;; Server publishes diagnostics to client.
+
+(define-handler ("textDocument/publishDiagnostics" publish-diagnostics-params)
+  (session request)
+  (declare (ignorable session request))
+  nil)
+
+(defun demo-diagnostic ()
+  (make-notification
+   "textDocument/publishDiagnostics"
+   (message-value
+    (make-message 'publish-diagnostics-params
+                  '((:uri . "file:///Users/jbouwman/git/coalton-mode/resources/fibonacci.coal")
+                    (:diagnostics . (((:range . ((:start (:line . 5)
+                                                         (:character . 4))
+                                                 (:end (:line . 5)
+                                                       (:character . 8))))
+                                      (:tags)
+                                      (:message . "export: 'fiib' is undefined")
+                                      (:code . "undefined-export")
+                                      (:langs)
+                                      (:severity . 2)
+                                      (:source . "coalton")))))))))

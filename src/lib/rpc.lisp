@@ -76,24 +76,48 @@
 (defclass rpc-message ()
   ((content :initarg :content
             :reader message-content
-            :documentation "A JSON value")
+            :documentation "JSON text")
    (parsed-content :initarg :parsed
                    :initform nil)))
 
-(defun get-parsed-content (rpc-message)
+(defun parsed-content (rpc-message)
   (with-slots (content parsed-content) rpc-message
     (unless parsed-content
-      (setf parsed-content (json:decode-json-from-string content)))
+      (setf parsed-content (decode-json content)))
     parsed-content))
 
+(defun message-field (rpc-message key)
+  (cdr (assoc (camel-case key) (parsed-content rpc-message) :test #'string-equal)))
+
 (defun message-id (rpc-message)
-  (cdr (assoc "id" (get-parsed-content rpc-message) :test #'string-equal)))
+  (message-field rpc-message :id))
+
+(defun message-type (rpc-message)
+  (let ((id (message-field rpc-message :id))
+        (method (message-field rpc-message :method)))
+    (cond ((and method id)
+           'request-message)
+          ((and method (not id))
+           'notification-message)
+          ((and (not method) id)
+           'response-message)
+          (t
+           nil))))
 
 (defmethod print-object ((self rpc-message) stream)
-  (print-unreadable-object (self stream :type t :identity t)
-    (format stream "id: ~a json = ~s"
-            (or (message-id self) "NONE")
-            (message-content self))))
+  (let* ((id (message-field self :id))
+         (method (message-field self :method))
+         (type (case (message-type self)
+                 (request-message "request")
+                 (notification-message "request")
+                 (response-message "response")
+                 (t "incomplete message"))))
+    (print-unreadable-object (self stream :type t :identity t)
+      (format stream "type: ~a method: ~a id: ~a json = ~s"
+              type
+              (or method "none")
+              (or id "none")
+              (message-content self)))))
 
 (defun read-rpc (stream)
   (/trace "enter read-rpc")
@@ -118,7 +142,7 @@
   (/trace "enter write-rpc")
   (let ((message (make-instance 'rpc-message
                    :parsed value
-                   :content (json:encode-json-to-string value))))
+                   :content (encode-json value))))
     (/debug "<= json-rpc ~a" message)
     (%write-rpc message stream)
     (/trace "exit write-rpc")))

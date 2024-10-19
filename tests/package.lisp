@@ -21,3 +21,31 @@
            (length b))
         (format nil "Strings differ at offset ~A of ~A:~%~A~%~A"
                 compare-len message a b))))
+
+(defun repository-path ()
+  (let ((path (namestring (asdf:system-source-directory "coalton-mode"))))
+    (subseq path 0 (1- (length path)))))
+
+(defun rpc-file (name)
+  (let ((path (format nil "~a/resources/rpc/~a" (repository-path) "initialize.json")))
+    (unless (probe-file path)
+      (error "RPC example input ~a not found at ~a" name path))
+    path))
+
+(defun pipe (input output &aux (buflen 8192))
+  (let ((buf (make-array buflen :element-type 'character)))
+    (loop
+      :for bytes = (read-sequence buf input)
+      :do (write-sequence buf output :start 0 :end bytes)
+      :while (= bytes buflen))))
+
+(defun read-file (filename)
+  (with-output-to-string (output)
+    (with-open-file (input filename :direction ':input)
+      (pipe input output))))
+
+(defun rpc-example (name)
+  (make-instance 'cm::rpc-message
+    :content (read-file (rpc-file name))))
+
+#+example (rpc-example "initialize.json")

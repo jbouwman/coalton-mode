@@ -1,6 +1,6 @@
 (in-package #:coalton-mode/tests)
 
-(deftest json-rpc-headers ()
+(deftest rpc-tests/headers ()
   (let ((parsed-headers
           '(("Content-Length" . "2")
             ("Content-Type" . "application/json")))

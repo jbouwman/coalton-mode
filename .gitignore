@@ -1,3 +1,5 @@
 *~
 *#
 *.fasl
+.clj-kondo
+.lsp
