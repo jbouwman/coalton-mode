@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","method":"client/registerCapability","params":{"registrations":[{"id":"id","method":"workspace/didChangeWatchedFiles","registerOptions":{"watchers":[{"globPattern":"**/*.{clj,cljs,cljc,cljd,edn,bb,clj_kondo}"}]}}]},"id":1}
