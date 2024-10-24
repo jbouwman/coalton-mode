@@ -31,6 +31,7 @@
   :serial t
   :components ((:file "package")
                (:file "mock")
+               (:file "json-tests")
                (:file "lsp-tests")
                (:file "message-tests")
                (:file "protocol-tests")

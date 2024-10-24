@@ -1,3 +1,5 @@
+# Run unit tests, failing on the first error
+
 .PHONY: test
 test:
 	sbcl --noinform --non-interactive \

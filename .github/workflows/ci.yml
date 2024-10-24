@@ -10,7 +10,7 @@ jobs:
     name: ${{matrix.lisp}} on ${{matrix.os}}
     strategy:
       matrix:
-        lisp: [allegro, ccl-bin, sbcl-bin]
+        lisp: [sbcl-bin]        # only one cool lisp
         os: [ubuntu-latest]
       fail-fast: false
     runs-on: ${{matrix.os}}
