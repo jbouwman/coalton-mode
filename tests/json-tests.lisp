@@ -4,4 +4,4 @@
 
   (is (equalp (cm::decode-json
                "{\"key\": \"value\"}")
-              '(("key" . "valuezorkxS!")))))
+              '(("key" . "value")))))
