@@ -2,24 +2,18 @@ This is an Emacs mode that supports working with Coalton.
 
 ## Requirements
 
-`lsp-mode`
+This mode has been developed using `eglot`, which is included with
+recent versions of Emacs.
 
-## Installation
+## Usage
 
-In your emacs init file (probably `~/.emacs.d/init.el` or `~/.emacs`), 
-add this directory to your load-path, and require the mode:
+In the Emacs init file (probably `~/.emacs.d/init.el`), add this
+directory to the load-path, and require the mode:
 
     ;; Coalton
     
     (add-to-list 'load-path "~/git/coalton-mode")
     (require 'coalton-mode)
-
-## Usage
-
-Open a .coal file (e.g., fibonacci.coal in the root directory) and
-enable lsp-mode With `M-x lsp-mode`.
-
-## Developing
 
 Start the server in slime with:
 
@@ -34,7 +28,7 @@ Start the server in slime with:
     ;; :INFO coalton-mode: start #<SERVER 127.0.0.1:10001 {700D0A4333}>
     #<COALTON-MODE::SERVER 127.0.0.1:10001 {700D0A4333}>
 
-Open resources/fibonacci.coal, and `M-x eglot`
+In Emacs, open a .caol file (e.g. resources/fibonacci.coal), and
+enable eglot mode:
 
-When prompted, enter 127.0.0.1:10001
-
+    M-x eglot
