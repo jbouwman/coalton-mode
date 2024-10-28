@@ -1,12 +1,10 @@
-;;;; Per-socket LSP session
-
 (in-package :coalton-lsp)
 
 (defclass session (process)
   ((id :initarg :id
        :reader session-id)
    (server :initarg :server)
-   (socket :initarg :socket)
+   (io :initarg :io)
    (event-queue :initform (make-instance 'worker)
                 :reader event-queue)
    (state :accessor session-state
@@ -34,16 +32,18 @@
       (/debug "process-event ~a" method)
       (funcall method session value))))
 
-(defun session-uri (session)
+(defun client-root-uri (session)
   (cdr (assoc "root-uri" (session-params session) :test #'string=)))
 
-(defun session-address (self)
+(defmethod uri ((self session))
   (with-slots (server id) self
-    (format nil "~a:~a" (server-address server) id)))
+    (format nil "~a/~a" (uri server) id)))
 
 (defmethod print-object ((self session) stream)
   (print-unreadable-object (self stream :type t)
-    (format stream "~a uri ~a" (session-address self) (session-uri self))))
+    (format stream "~a root ~a"
+            (uri self)
+            (client-root-uri self))))
 
 (defun initializing-session (session params)
   (setf (session-state session) 'initializing)
@@ -56,6 +56,7 @@
     nil))
 
 (defun position-encoding (session)
+  (declare (ignore session))
   ':utf16)                              ; TODO consult capabilities
 
 (defun update-configuration (session config)
@@ -147,9 +148,6 @@
     (set-field message :diagnostics diagnostics)
     (let ((notification (make-notification "textDocument/publishDiagnostics" message)))
       (submit-event session 'write-message notification))))
-
-(defun session-stream (session)
-  (usocket:socket-stream (slot-value session 'socket)))
 
 (define-condition session-exit ()
   ())
@@ -273,38 +271,37 @@
 (defun write-message (session response)
   (let ((json (to-json response)))
     (with-lock-held (session)
-      (write-rpc json (session-stream session)))))
+      (with-slots (io) session
+        (write-rpc json (output-stream io))))))
 
 (defmethod run ((self session))
-  (with-slots (event-queue) self
+  (with-slots (io event-queue server) self
     (setf (slot-value event-queue 'fn)
           (lambda (event)
             (process-event self event)))
-    (start event-queue))
-  (handler-case
-      (loop :do
-        (handler-case
-            (progn
-              (let ((message (read-rpc (session-stream self))))
-                (submit-event self 'process-message message)))
-          (sb-int:closed-stream-error ()
-            (/info "remote session disconnected (stream closed)")
-            (signal 'session-exit))
-          (end-of-file ()
-            (/info "remote session disconnected (end of file)")
-            (signal 'session-exit))
-          (error (c)
-            (/error "aborted read: session shutdown: ~a" c)
-            (signal 'session-exit))))
-    (session-exit ()
-      (stop self))))
+    (start event-queue)
+    (handler-case
+        (loop :do
+          (handler-case
+              (progn
+                (let ((message (read-rpc (input-stream io))))
+                  (submit-event self 'process-message message)))
+            (sb-int:closed-stream-error ()
+              (/info "remote session disconnected (stream closed)")
+              (signal 'session-exit))
+            (end-of-file ()
+              (/info "remote session disconnected (end of file)")
+              (signal 'session-exit))
+            (error (c)
+              (/error "aborted read: session shutdown: ~a" c)
+              (signal 'session-exit))))
+      (session-exit ()
+        (stop-session server self)))))
 
-(defmethod stop ((session session))
-  (with-session-context (session)
+(defmethod stop ((self session))
+  (with-session-context (self)
     (/info "stopping")
-    (with-slots (server socket event-queue) session
+    (with-slots (io event-queue) self
       (stop event-queue)
-      (usocket:socket-close socket)
-      (delete-session server session))
-    (call-next-method)
-    session))
+      (stop io))
+    (call-next-method)))

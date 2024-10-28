@@ -1,11 +1,37 @@
-;;;; Functions for starting and stoping the LSP server
-;;;;
-;;;; Use COALTON-LSP:MAIN to run from a shell, use START-SERVER to run
-;;;; in a repl or slime process.
+;;;; Functions for starting and stopping the LSP server
 
 (in-package :coalton-lsp)
 
-(defclass server (process)
+(defgeneric uri (resource))
+
+(defgeneric input-stream (session-io))
+
+(defgeneric output-stream (session-io))
+
+(defgeneric stop-session (server session))
+
+(defvar *server* nil
+  "The server process.")
+
+;;; network server
+
+(defvar *default-port* 7887
+  "The default port of LSP sessions.")
+
+(defclass network-io ()
+  ((socket :initarg :socket)))
+
+(defmethod input-stream ((self network-io))
+  (usocket:socket-stream (slot-value self 'socket)))
+
+(defmethod output-stream ((self network-io))
+  (usocket:socket-stream (slot-value self 'socket)))
+
+(defmethod stop ((self network-io))
+  (with-slots (socket) self
+    (usocket:socket-close socket)))
+
+(defclass network-server (process)
   ((session-id :initform 0
                :accessor session-id)
    (config :initarg :config)
@@ -13,20 +39,17 @@
    (sessions :initform nil))
   (:documentation "A Coalton LSP server"))
 
-(defun server-address (server)
+(defmethod uri ((self network-server))
   "Return the string representation of SERVER's network address."
-  (with-slots (config) server
+  (with-slots (config) self
     (destructuring-bind (&key host port &allow-other-keys) config
-      (format nil "~a:~a" host port))))
+      (format nil "json-rpc://~a:~a" host port))))
 
-(defmethod print-object ((self server) stream)
+(defmethod print-object ((self network-server) stream)
   (print-unreadable-object (self stream :type t :identity t)
-    (write-string (server-address self) stream)))
+    (write-string (uri self) stream)))
 
-;;; Server run function: listen for and accept connections, and create
-;;; sessions.
-
-(defmethod run ((self server))
+(defmethod run ((self network-server))
   (with-slots (listener sessions) self
     (handler-case
         (loop :do
@@ -45,24 +68,23 @@
   (push (start (make-instance 'session
                  :id (incf (session-id server))
                  :server server
-                 :socket socket))
+                 :io (make-instance 'network-io
+                       :socket socket)))
         (slot-value server 'sessions)))
 
-(defun delete-session (server session)
-  "Remove a previously stopped SESSION form server."
+(defmethod stop-session ((server network-server) session)
   (with-slots (lock sessions) server
     (bt:with-recursive-lock-held (lock)
+      (stop session)
       (delete session sessions))))
 
-;;; Open the server port. The next-method will enter RUN.
-
-(defmethod start ((server server))
+(defmethod start ((server network-server))
   (with-slots (config listener thread) server
     (destructuring-bind (&key interface host port &allow-other-keys) config
       (setf listener (usocket:socket-listen (or interface host) port :reuse-address t))))
   (call-next-method))
 
-(defmethod stop ((self server))
+(defmethod stop ((self network-server))
   (with-lock-held (self)
     (with-slots (sessions listener) self
       (when listener
@@ -72,11 +94,35 @@
         (stop session))))
   (call-next-method))
 
-(defvar *default-port* 7887
-  "The default port of LSP sessions.")
+;;; local server
 
-(defvar *server* nil
-  "The server process.")
+(defclass stream-io ()
+  ((input :initarg :input
+          :reader input-stream)
+   (output :initarg :output
+           :reader output-stream)))
+
+(defmethod stop ((self stream-io)))
+
+(defclass stream-server ()
+  ())
+
+(defmethod uri ((self stream-server))
+  "json-rpc:stdio")
+
+(defmethod stop-session ((self stream-server) session))
+
+(defun start-stream-server (input output)
+  (when *server*
+    (error "server is running: ~a" *server*))
+  (setf *server*
+        (make-instance 'stream-server))
+  (start (make-instance 'session
+           :id 1
+           :server *server*
+           :io (make-instance 'stream-io
+                 :input input
+                 :output output))))
 
 (defun stop-server ()
   "Close all sessions and stop the server."
@@ -84,23 +130,22 @@
     (/warn "coalton-lsp not running")
     (return-from stop-server))
   (stop *server*)
-  (setf *server* nil)
-  (/info "~a halted"))
+  (/info "~a halted" *server*)
+  (setf *server* nil))
 
-(defun start-server (&optional (port *default-port*))
+(defun start-network-server (port)
   "Run a Coalton LSP server on PORT."
   (when *server*
-    (/info "halting server at tcp:~a" (server-address *server*))
-    (stop-server))
+    (error "server is running: ~a" *server*))
   (setf *server*
-        (start (make-instance 'server
+        (start (make-instance 'network-server
                  :config (list :port port
                                :host "127.0.0.1"))))
-  (/info "coalton-lsp started at tcp:~a" (server-address *server*)))
+  (/info "~a started" *server*))
 
 (defun parse-argv (argv)
   (pop argv)
-  (let ((port *default-port*))
+  (let ((port nil))
     (loop :while argv
           :do (cond ((string-equal (car argv) "--port")
                      (unless (cadr argv)
@@ -119,9 +164,13 @@
 (defun main ()
   "Run the Coalton LSP server."
   (setf *logger*
-        (make-instance 'stream-logger :stream *standard-output* :level ':info))
+        (make-instance 'stream-logger :stream *error-output* :level ':info))
   (let ((port (parse-argv sb-ext:*posix-argv*)))
-    (start-server port)
+    (cond (port
+           (start-network-server port))
+          (t
+           (start-stream-server *standard-input*
+                                *standard-output*)))
     (handler-case
         (loop (sleep 1))
       (sb-sys:interactive-interrupt ()
