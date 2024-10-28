@@ -81,11 +81,11 @@
 (defun stop-server ()
   "Close all sessions and stop the server."
   (when (null *server*)
-    (/warn "server not running")
+    (/warn "coalton-lsp not running")
     (return-from stop-server))
   (stop *server*)
   (setf *server* nil)
-  (/info "server halted"))
+  (/info "~a halted"))
 
 (defun start-server (&optional (port *default-port*))
   "Run a Coalton LSP server on PORT."
@@ -96,14 +96,35 @@
         (start (make-instance 'server
                  :config (list :port port
                                :host "127.0.0.1"))))
-  (/info "server started at tcp:~a" (server-address *server*)))
+  (/info "coalton-lsp started at tcp:~a" (server-address *server*)))
 
-(defun main (&key (port *default-port*))
-  "Run a Coalton LSP server on PORT, halting on interrupt."
-  (start-server port)
-  (handler-case
-      (loop (sleep 1))
-    (sb-sys:interactive-interrupt ()
-      (/info "server halted")
-      (terpri)
-      (cl-user::quit))))
+(defun parse-argv (argv)
+  (pop argv)
+  (let ((port *default-port*))
+    (loop :while argv
+          :do (cond ((string-equal (car argv) "--port")
+                     (unless (cadr argv)
+                       (error "missing PORT argument"))
+                     (handler-case
+                         (progn
+                           (setf port (parse-integer (cadr argv)))
+                           (pop argv)
+                           (pop argv))
+                       (error ()
+                         (error "illegal PORT value ~a" (cadr argv)))))
+                    (t
+                     (error "unknown argument ~a" (car argv)))))
+    port))
+
+(defun main ()
+  "Run the Coalton LSP server."
+  (setf *logger*
+        (make-instance 'stream-logger :stream *standard-output* :level ':info))
+  (let ((port (parse-argv sb-ext:*posix-argv*)))
+    (start-server port)
+    (handler-case
+        (loop (sleep 1))
+      (sb-sys:interactive-interrupt ()
+        (/info "coalton-lsp halted")
+        (terpri)
+        (cl-user::quit)))))

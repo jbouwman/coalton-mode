@@ -3,14 +3,14 @@ name: CI
 on:
   push:
   pull_request:
-    branches: [master]
+    branches: [main]
 
 jobs:
   test:
     name: ${{matrix.lisp}} on ${{matrix.os}}
     strategy:
       matrix:
-        lisp: [sbcl-bin]        # only one cool lisp
+        lisp: [sbcl-bin]
         os: [ubuntu-latest]
       fail-fast: false
     runs-on: ${{matrix.os}}
@@ -26,10 +26,4 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          ros -e '(format t "Lisp: ~a ~a on ~a~%" (lisp-implementation-type) (lisp-implementation-version) (machine-type))'
-          ros -e '(ql:quickload "trivial-features" :silent t)' -e '(format t "Features: ~s~%" *features*)'
-
-      - name: Run tests
-        shell: bash
-        run: |
-          ros -e '(setf *debugger-hook* (lambda (&rest ignorable) (declare (ignore ignorable)) (uiop:quit -1)))' -e '(ql:quickload "coalton-lsp/tests")' -e '(unless (fiasco:all-tests) (uiop:quit -1))'
+          ros -e '(format t "Lisp: ~a ~a on ~a~%" (lisp-implementation-type) (lisp-implementation-version) (machine-type)) -e '(setf *debugger-hook* (lambda (&rest ignorable) (declare (ignore ignorable)) (uiop:quit -1)))' -e '(ql:quickload "coalton-lsp/tests")' -e '(unless (fiasco:all-tests) (uiop:quit -1))'

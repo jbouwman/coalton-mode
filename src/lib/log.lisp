@@ -25,7 +25,7 @@
   "Helper for write-log: print any bound logging dynamic context messages."
   (dolist (c *context*)
     (funcall (cdr c) stream)
-    (write-string " : " stream)))
+    (write-string " | " stream)))
 
 (defgeneric log-p (destination level))
 
@@ -54,9 +54,9 @@
       (bt:with-lock-held (lock)
         (write-string ";; " stream)
         (write-timestamp stream)
-        (write-string " : " stream)
-        (princ level stream)
-        (write-string " : " stream)
+        (write-string " | " stream)
+        (princ (string-downcase (symbol-name level)) stream)
+        (write-string " | " stream)
         (%write-context stream)
         (apply #'format stream format format-args)
         (terpri stream)))))
